@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TgMetro</title>
+<style>
+:root{--bg:#0E1621;--card:#17212B;--line:#2A3644;--text:#F5F5F5;--muted:#7F91A4;--blue:#3390EC;--gold:#FFD67E;--green:#5CC96E;--red:#ff6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:1060px;margin:auto;padding:12px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.logo{font-size:20px;font-weight:900}.logo b{color:var(--blue)}
+.pill{background:var(--card);border:1px solid var(--line);padding:7px 12px;border-radius:10px;font-weight:800;color:var(--gold)}
+.pill.g{color:var(--green)}.pill.b{color:var(--blue)}
+.lay{display:grid;grid-template-columns:1fr 290px;gap:12px;align-items:start}
+#cv{width:100%;height:470px;display:block;background:#0B141D;border:1px solid var(--line);border-radius:14px;cursor:pointer}
+.panel{display:grid;gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.card h3{margin:0 0 8px;font-size:14.5px}
+.btn{border:0;border-radius:9px;padding:8px 12px;color:#fff;font-weight:800;cursor:pointer;background:var(--blue);font-size:12.5px}
+.btn:hover{filter:brightness(1.12)}.btn.alt{background:var(--line)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.lchip{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:9px;background:#0B141D;border:1px solid var(--line);cursor:pointer;font-weight:800;font-size:12px;margin-bottom:5px;justify-content:space-between}
+.lchip.on{border-color:var(--gold);box-shadow:0 0 8px #FFD67E33}
+.lchip i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.upg{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.hint{font-size:12.5px;color:var(--muted);line-height:1.45}
+.feed{display:grid;gap:5px;max-height:140px;overflow:auto}
+.feed div{padding:6px 10px;background:#0B141D;border:1px solid var(--line);border-radius:8px;color:#aab8c6;font-size:12px}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 15px;display:none;z-index:50}.toast.show{display:block}
+@media(max-width:820px){.lay{grid-template-columns:1fr}#cv{height:400px}}
+</style></head>
+<body>
+<div class="wrap">
+<div class="top"><div class="logo">🚇 <b>TgMetro</b></div>
+<div style="display:flex;gap:7px;flex-wrap:wrap"><div class="pill" id="pB">⭐500</div><div class="pill g" id="pI">+0/с</div><div class="pill b" id="pR">🙂70%</div><div class="pill" id="pD">0</div></div></div>
+<div class="lay">
+<canvas id="cv"></canvas>
+<div class="panel">
+<div class="card"><h3>📍 Как строить</h3><div class="hint" id="hint">Кликни станцию, потом другую — между ними проложится линия. Поезд появится сам!</div></div>
+<div class="card"><h3>🚇 Линии <span class="muted" id="lCnt"></span></h3><div id="lines"></div></div>
+<div class="card"><h3>🏗 Город</h3><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn alt" id="platBtn" onclick="togglePlat()">📦 Платформа</button><button class="btn alt" onclick="newSt()">🏗 Станция 250⭐</button></div><div class="hint" style="margin-top:6px">Платформа: включи и кликни станцию — +8 местности очереди.</div></div>
+<div class="card"><h3>📰 События</h3><div class="feed" id="feed"></div></div>
+<div class="card"><button class="btn alt" style="width:100%" onclick="resetG()">Начать заново</button></div>
+</div>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+const K='tgmetro_v2';
+const COLORS=['#3390EC','#E579B9','#54DFA0','#FFD45A','#B694E8','#FF845E'];
+const NAMES=['Центральная','Парковая','Заводская','Университет','Речная','Вокзал','Стадион','Ботаническая','Площадь','Аэропорт','Морская','Театральная','Заречная','Верхняя','Космопорт','Нижняя'];
+let S=JSON.parse(localStorage.getItem(K)||'null');
+if(!S)S={budget:500,delivered:0,rep:70,stations:[],lines:[],sel:null,log:[],last:Date.now(),evT:70,ips:0,pend:null,plat:false};
+S.log=S.log||[];
+const $=id=>document.getElementById(id);
+const rnd=n=>Math.floor(Math.random()*n);
+const save=()=>{S.last=Date.now();localStorage.setItem(K,JSON.stringify(S))};
+let tt;const toast=x=>{let e=$('toast');e.textContent=x;e.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('show'),2300)};
+const log=x=>{S.log.push(x);if(S.log.length>24)S.log.shift()};
+function addSt(x,y){let free=NAMES.filter(n=>!S.stations.some(s=>s.n===n));let st={id:Math.random().toString(36).slice(2),x,y,n:free.length?free[rnd(free.length)]:'Ст-'+(S.stations.length+1),q:[],cap:10};S.stations.push(st);log('🏗 Станция «'+st.n+'»');return st}
+if(!S.stations.length){addSt(22,26);addSt(68,22);addSt(28,68);addSt(70,66);log('🚇 Соедини станции — кликни две!')}
+/* ====== ЭКОНОМИКА ====== */
+const stById=id=>S.stations.find(s=>s.id===id);
+const lineOf=id=>S.lines.findIndex(l=>l.stops.includes(id));
+const fare=(a,b)=>{let A=stById(a),B=stById(b);return Math.round(4+Math.hypot(A.x-B.x,A.y-B.y)*0.55)};
+const lineSlots=()=>Math.min(6,2+Math.floor(S.delivered/35));
+const lineCost=()=>Math.round(300*Math.pow(1.9,S.lines.length));
+/* ====== СТРОИТЕЛЬСТВО ====== */
+function connect(a,b){let la=lineOf(a),lb=lineOf(b);
+ if(la===lb&&la>=0)return toast('Эти станции уже на одной линии');
+ if(la>=0&&lb>=0)return toast('Станции на разных линиях — пока нельзя соединить');
+ if(S.pend)S.pend=null;
+ if(la<0&&lb<0){if(S.lines.length>=lineSlots())return toast('Линий максимум ('+lineSlots()+'). Вози пассажиров — откроются новые!');
+  if(S.lines.length>0&&S.budget<lineCost())return toast('Нужно ⭐'+lineCost()+' на новую линию');
+  if(S.lines.length>0)S.budget-=lineCost();
+  S.lines.push({c:COLORS[S.lines.length%6],stops:[a,b],trains:[{leg:0,t:0,load:[],dwell:0,broken:0}],spd:1,cap:6});
+  S.sel=S.lines.length-1;log('🚇 Линия '+S.lines.length+' запущена! Поезд уже в пути');save();return}
+ let li=la>=0?la:lb,l=S.lines[li],nid=la>=0?b:a;
+ if(l.stops.length>=9)return toast('Максимум 9 станций на линии');
+ l.stops.push(nid);S.sel=li;log('📍 Линия '+(li+1)+' → «'+stById(nid).n+'»');save()}
+function togglePlat(){S.plat=!S.plat;$('platBtn').classList.toggle('on',S.plat);hint()}
+function newSt(){if(S.stations.length>=18)return toast('Город заполнен');if(S.budget<250)return toast('Нужно ⭐250');
+ S.budget-=250;let x,y;do{x=8+rnd(84);y=10+rnd(78)}while(S.stations.some(s=>Math.hypot(s.x-x,s.y-y)<14));
+ addSt(x,y);toast('🏗 Станция «'+S.stations[S.stations.length-1].n+'»');save()}
+/* ====== АПГРЕЙДЫ ====== */
+function upTrain(){let l=S.lines[S.sel];if(!l)return;if(l.trains.length>=4)return toast('Максимум 4 поезда');
+ if(S.budget<250)return toast('Нужно ⭐250');S.budget-=250;l.trains.push({leg:0,t:0,load:[],dwell:0,broken:0});log('🚃 +1 поезд на линию '+(S.sel+1));save()}
+function upSpeed(){let l=S.lines[S.sel];if(!l)return;if(l.spd>=5)return toast('Максимум ×5');
+ let c=Math.round(300*Math.pow(1.6,l.spd-1));if(S.budget<c)return toast('Нужно ⭐'+c);S.budget-=c;l.spd++;log('⏩ Линия '+(S.sel+1)+' — скорость ×'+l.spd);save()}
+function upCap(){let l=S.lines[S.sel];if(!l)return;if(l.cap>=14)return toast('Максимум 14 мест');
+ let c=Math.round(350*Math.pow(1.7,(l.cap-6)/4));if(S.budget<c)return toast('Нужно ⭐'+c);S.budget-=c;l.cap+=2;log('📦 Линия '+(S.sel+1)+' — вагоны +2 места');save()}
+/* ====== КЛИКИ ПО КАНВАСУ ====== */
+const cv=$('cv'),ctx=cv.getContext('2d');
+if(!ctx.roundRect)ctx.roundRect=function(x,y,w,h){this.rect(x,y,w,h)};
+function cssSize(){let r=cv.getBoundingClientRect();cv.width=r.width*2;cv.height=r.height*2}
+window.addEventListener('resize',cssSize);cssSize();
+function nearest(x,y){let best=null,bd=30;S.stations.forEach(s=>{let d=Math.hypot(s.x-x,s.y-y);if(d<bd){bd=d;best=s}});return best}
+cv.addEventListener('click',e=>{let r=cv.getBoundingClientRect();
+ let x=(e.clientX-r.left)/r.width*100,y=(e.clientY-r.top)/r.height*100;
+ let st=nearest(x,y);
+ if(S.plat){if(!st)return toast('Кликни по станции');let c=Math.round(200*Math.pow(1.5,st.cap/10));
+  if(S.budget<c)return toast('Нужно ⭐'+c);S.budget-=c;st.cap+=8;log('📦 «'+st.n+'» расширена');save();return}
+ if(!st){S.pend=null;return}
+ if(!S.pend){S.pend=st.id;hint();return}
+ if(S.pend===st.id){S.pend=null;hint();return}
+ connect(S.pend,st.id);S.pend=null;hint()});
+function hint(){let p=S.pend?stById(S.pend):null;
+ $('hint').innerHTML=S.plat?'📦 Режим платформы: кликни станцию для расширения очереди.':
+ p?'Выбрана «'+p.n+'». Кликни другую станцию — проложится линия ('+(lineOf(p.id)>=0?'добавится в линию '+ (lineOf(p.id)+1):'новая линия '+lineCost()+'⭐')+').':
+ 'Кликни станцию, потом другую — между ними проложится линия. Поезд появится сам!'}
+/* ====== СИМУЛЯЦИЯ ====== */
+let marathon=0,secInc=0;
+function step(dt){
+ let rate=(0.10+S.stations.length*0.009)*(0.4+S.rep/125)*(marathon>0?2:1);
+ S.stations.forEach(st=>{if(S.stations.length>1&&Math.random()<rate*dt){let o=S.stations.filter(x=>x.id!==st.id)[rnd(S.stations.length-1)];st.q.push({d:o.id,f:fare(st.id,o.id),t:Date.now()})}
+  st.q=st.q.filter(p=>Date.now()-p.t<45000||(S.rep=Math.max(5,S.rep-1),false))});
+ S.lines.forEach(l=>{if(l.stops.length<2)return;
+  l.trains.forEach(tr=>{if(tr.broken>0){tr.broken-=dt;return}
+   if(tr.dwell>0){tr.dwell-=dt;return}
+   let A=stById(l.stops[tr.leg]),B=stById(l.stops[(tr.leg+1)%l.stops.length]);
+   tr.t+=dt*58*l.spd/(Math.hypot(A.x-B.x,A.y-B.y)||1);
+   if(tr.t>=1){tr.t=0;tr.leg=(tr.leg+1)%l.stops.length;exchange(l,tr)}})});
+ let hot=S.stations.filter(s=>s.q.length>s.cap).length;
+ S.rep=Math.max(5,Math.min(100,S.rep+(hot?-2.2:0.8)*dt));
+ S.evT-=dt;if(S.evT<=0){S.evT=75+rnd(70);event()}
+ if(marathon>0)marathon-=dt}
+function exchange(l,tr){let st=stById(l.stops[tr.leg]);
+ tr.load=tr.load.filter(p=>{if(p.d===st.id){S.budget+=p.f;S.delivered++;secInc+=p.f;return false}return true});
+ let set=l.stops.filter(id=>id!==st.id),room=l.cap-tr.load.length,n=0;
+ st.q=st.q.filter(p=>{if(n>=room)return true;if(set.includes(p.d)){tr.load.push(p);n++;return false}return true});
+ tr.dwell=1}
+function event(){let r=rnd(3);
+ if(r===0){marathon=30;log('🏃 Марафон! Поток ×2 на 30 сек');toast('🏃 Марафон!')}
+ else if(r===1){let all=S.lines.flatMap(l=>l.trains);if(all.length){all[rnd(all.length)].broken=15;log('⚠️ Поломка поезда!');toast('⚠️ Поломка поезда')}}
+ else if(S.stations.length<18){let x,y;do{x=8+rnd(84);y=10+rnd(78)}while(S.stations.some(s=>Math.hypot(s.x-x,s.y-y)<14));
+  addSt(x,y);toast('🏗 Новая станция: '+S.stations[S.stations.length-1].n)}}
+/* ====== РЕНДЕР ====== */
+function draw(){let W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);const P=v=>v/100*W,PY=v=>v/100*H;
+ ctx.fillStyle='#0B141D';ctx.fillRect(0,0,W,H);
+ ctx.fillStyle='#1a2635';for(let i=1;i<10;i++)for(let j=1;j<8;j++){ctx.beginPath();ctx.arc(W*i/10,H*j/8,2,0,7);ctx.fill()}
+ ctx.lineWidth=9;ctx.lineJoin='round';ctx.lineCap='round';
+ S.lines.forEach(l=>{if(l.stops.length<2)return;ctx.strokeStyle=l.c;ctx.beginPath();
+  l.stops.forEach((id,i)=>{let st=stById(id);i?ctx.lineTo(P(st.x),PY(st.y)):ctx.moveTo(P(st.x),PY(st.y))});
+  ctx.closePath();ctx.stroke()});
+ S.lines.forEach(l=>{if(l.stops.length<2)return;l.trains.forEach(tr=>{let A=stById(l.stops[tr.leg]),B=stById(l.stops[(tr.leg+1)%l.stops.length]);
+  let x=P(A.x+(B.x-A.x)*tr.t),y=PY(A.y+(B.y-A.y)*tr.t);
+  ctx.fillStyle=tr.broken>0?'#555':l.c;ctx.strokeStyle='#0B141D';ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(x-11,y-7,22,14,5);ctx.fill();ctx.stroke()})});
+ S.stations.forEach(st=>{let x=P(st.x),y=PY(st.y),used=S.lines.filter(l=>l.stops.includes(st.id)).length,hot=st.q.length>st.cap;
+  ctx.fillStyle=hot?'#ff6b6b':'#0B141D';ctx.strokeStyle=used>1?'#FFD67E':'#7F91A4';ctx.lineWidth=used>1?5:3.5;
+  ctx.beginPath();ctx.arc(x,y,15,0,7);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(st.n[0],x,y+1);
+  ctx.fillStyle=hot?'#ff6b6b':'#3390EC';ctx.beginPath();ctx.arc(x+13,y-13,10,0,7);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font='bold 11px sans-serif';ctx.fillText(st.q.length,x+13,y-12);
+  ctx.fillStyle='#7F91A4';ctx.font='10.5px sans-serif';ctx.fillText(st.n,x,y+30)});
+ if(S.pend){let st=stById(S.pend);ctx.strokeStyle='#FFD67E';ctx.lineWidth=3;ctx.beginPath();ctx.arc(P(st.x),PY(st.y),21+Math.sin(Date.now()/150)*2,0,7);ctx.stroke()}}
+/* ====== HUD ====== */
+function hud(){let f=Math.floor(S.budget);
+ $('pB').textContent='⭐'+f;$('pI').textContent='+'+S.ips.toFixed(1)+'/с';
+ $('pR').textContent=(S.rep<30?'😠':S.rep<55?'😐':S.rep<75?'🙂':'😄')+Math.round(S.rep)+'%';
+ $('pD').textContent=S.delivered+' пасс.';
+ $('lCnt').textContent='· '+S.lines.length+'/'+lineSlots();
+ $('lines').innerHTML=S.lines.map((l,i)=>'<div class="lchip '+(S.sel===i?'on':'')+'" onclick="S.sel='+i+';hud()"><span><i style="background:'+l.c+'"></i>Линия '+(i+1)+'</span><span class="muted">'+l.stops.length+' ст · '+l.trains.length+' поездов · ×'+l.spd+'</span></div>').join('')||'<span class="muted">Нет линий — кликни две станции</span>';
+ let l=S.lines[S.sel];
+ $('lines').innerHTML+=(l&&S.sel!=null)?'<div class="upg"><button class="btn" onclick="upTrain()">🚃 Поезд 250</button><button class="btn" onclick="upSpeed()">⏩ ×'+(l.spd>=5?'MAX':l.spd+1)+' '+Math.round(300*Math.pow(1.6,l.spd-1))+'</button><button class="btn" onclick="upCap()">📦 '+(l.cap>=14?'MAX':l.cap+2)+' '+Math.round(350*Math.pow(1.7,(l.cap-6)/4))+'</button></div>':'';
+ $('feed').innerHTML=S.log.slice(-9).reverse().map(x=>'<div>'+x+'</div>').join('')}
+/* ====== ЦИКЛ ====== */
+let last=Date.now();
+function loop(){let now=Date.now(),dt=Math.min(0.25,(now-last)/1000);last=now;step(dt);draw();requestAnimationFrame(loop)}
+requestAnimationFrame(loop);
+setInterval(()=>{S.ips=S.ips*0.85+secInc*0.15;secInc=0;hud();save()},1000);
+/* ====== ОФФЛАЙН / СБРОС ====== */
+let el=Math.min(28800,(Date.now()-S.last)/1000);
+if(el>60&&S.ips>0){let g=Math.floor(S.ips*el*0.5);S.budget+=g;setTimeout(()=>toast('🚇 Метро работало: +⭐'+g),600)}
+function resetG(){if(confirm('Снести всё метро?')){localStorage.removeItem(K);location.reload()}}
+hud();
+</script></body></html>
